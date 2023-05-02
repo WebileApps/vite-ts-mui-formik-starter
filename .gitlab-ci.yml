@@ -1,0 +1,66 @@
+stages:
+  - compile
+  - build
+  - deploy
+
+cache:
+  paths:
+    - node_modules/
+  key: '$CI_COMMIT_REF_SLUG'
+
+compile_app:
+  image: node:16.13.2
+  stage: compile
+  tags:
+    - docker
+  before_script:
+    - yarn
+  script:
+    - yarn type-check
+
+build_app:
+  image: node:16.13.2
+  stage: build
+  variables:
+    VITE_API_BASE_URL: ''
+  tags:
+    - docker
+  before_script:
+    - yarn
+  script:
+    - yarn build
+  after_script:
+    - echo $(date) >> "dist/static/buildTime.txt"
+  artifacts:
+    expire_in: 2 days
+    paths:
+      - dist
+  only:
+    refs:
+      - branches
+    variables:
+      - $CI_COMMIT_REF_PROTECTED == "true"
+
+.deploy:
+  stage: deploy
+  needs:
+    - build_app
+  cache: {}
+  before_script:
+    - whoami
+  script:
+    - 'sudo rm -rf $STATIC_DIR/*'
+    - echo "Deleted remote build"
+    - 'sudo cp -r dist/* $STATIC_DIR/'
+
+deploy:dev:
+  variables:
+    STATIC_DIR: /var/www/sundaram/dev
+  tags:
+    - sundaram-shell
+  stage: deploy
+  extends:
+    - .deploy
+  only:
+    refs:
+      - main
